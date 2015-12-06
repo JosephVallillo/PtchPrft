@@ -13,100 +13,170 @@ class PlaySoundsViewController: UIViewController {
     
     //MARK: - Constants
     private struct SoundEffects {
-        struct Speed {
-            static let Slow: Float = 0.5
-            static let Fast: Float = 1.5
+        struct Rate {
+            static let Default: Float = 0.0
         }
         struct Pitch {
-            static let High: Float = 1000.0
-            static let Low: Float = -1000.0
+            static let Default: Float = 0.0
         }
+        struct Distortion {
+            static let Default: Float = 0.0
+        }
+        struct Echo {
+            static let Default: Float = 0.0
+        }
+    }
+    
+    private struct SegueIdentifiers {
+        static let SettingsIdentifier = "Set Settings"
+    }
+    
+    //MARK: - Settings Model
+    private let settings = Settings()
+    
+    var slowRate: Float {
+        return settings.slowRate
+    }
+    
+    var highRate: Float {
+        return settings.highRate
+    }
+    
+    var highPitch: Float {
+        return settings.highPitch
+    }
+    
+    var lowPitch: Float {
+        return settings.lowPitch
+    }
+    
+    var distort: Float {
+        return settings.distort
+    }
+    
+    var echo: Float {
+        return settings.echo
     }
     
     //MARK: - Properties
     var avPlayer: AVAudioPlayer!
-    var receivedAudio: RecordedAudio!
-    var audioEngine: AVAudioEngine!
-    var audioFile: AVAudioFile!
+    var receivedAudio:RecordedAudio!
+    var audioEngine:AVAudioEngine!
+    var audioFile:AVAudioFile!
+    var avPlayerNode:AVAudioPlayerNode!
+    var echoEffect:AVAudioUnitDelay!
+    var timePitchEffect:AVAudioUnitTimePitch!
+    var distortionEffect:AVAudioUnitDistortion!
+    var speedEffect:AVAudioUnitVarispeed!
+
     
     //MARK: - Audio Editing
-    func playSoundWithSpeed(speed: Float){
-        avPlayer.stop()
-        avPlayer.rate = speed
-        avPlayer.currentTime = 0.0
-        avPlayer.play()
-    }
-    
-    func playSoundWithPitch(pitch: Float) {
-        avPlayer.stop()
-        audioEngine.stop()
-        audioEngine.reset()
+    func playAudio(pitch pitch: Float, rate: Float, echo: Float, distortion: Float) {
         
-        let avPlayerNode = AVAudioPlayerNode()
-        audioEngine.attachNode(avPlayerNode)
+        //stop audio, reset Engine
+        stopAndResetAudio()
         
-        let changePitchEffect = AVAudioUnitTimePitch()
-        changePitchEffect.pitch = pitch
-        audioEngine.attachNode(changePitchEffect)
+        //set defaults
+        echoEffect.delayTime = NSTimeInterval(0)
+        echoEffect.feedback = 0
+        distortionEffect.wetDryMix = 0
+        timePitchEffect.pitch = 1
+        speedEffect.rate = 1
         
-        audioEngine.connect(avPlayerNode, to: changePitchEffect, format: nil)
-        audioEngine.connect(changePitchEffect, to: audioEngine.outputNode, format: nil)
+        //set audio parameters
+        timePitchEffect.pitch = pitch
         
-        avPlayerNode.scheduleFile(audioFile, atTime: nil, completionHandler: nil)
+        if (rate != 0) { speedEffect.rate = rate }
         
-        do{
-            try audioEngine.start()
-        } catch {
-            print("Could not start audio engine")
+        if (echoEffect != 0) {
+            echoEffect.delayTime = NSTimeInterval(echo)
+            echoEffect.feedback = 25
+        } else {
+            echoEffect.delayTime = 0
         }
         
-        avPlayerNode.play()
+        distortionEffect.wetDryMix = distortion
+        
+        //connect engine
+        audioEngine.connect(avPlayerNode, to: speedEffect, format: nil)
+        audioEngine.connect(speedEffect, to: timePitchEffect, format: nil)
+        audioEngine.connect(timePitchEffect, to: distortionEffect, format: nil)
+        audioEngine.connect(distortionEffect, to: echoEffect, format: nil)
+        audioEngine.connect(echoEffect, to: audioEngine.outputNode, format: nil)
+        avPlayerNode.scheduleFile(audioFile, atTime: nil, completionHandler: nil)
+        
+        do {
+            try audioEngine.start()
+            avPlayerNode.play()
+        } catch _ {
+            print("Exception occurred in setupEngine")
+        }
+    }
+    
+    func stopAndResetAudio() {
+        audioEngine.stop()
+        audioEngine.reset()
+        avPlayerNode.stop()
     }
     
     //MARK: - Button Actions
     @IBAction func playSlowSound(sender: UIButton) {
-        playSoundWithSpeed(SoundEffects.Speed.Slow)
+        playAudio(pitch: SoundEffects.Pitch.Default, rate: slowRate, echo: SoundEffects.Echo.Default, distortion: SoundEffects.Distortion.Default)
     }
     @IBAction func plauFastSound(sender: UIButton) {
-        playSoundWithSpeed(SoundEffects.Speed.Fast)
+        playAudio(pitch: SoundEffects.Pitch.Default, rate: highRate, echo: SoundEffects.Echo.Default, distortion: SoundEffects.Distortion.Default)
     }
     @IBAction func playHighPitchSound(sender: UIButton) {
-        playSoundWithPitch(SoundEffects.Pitch.High)
+        playAudio(pitch: highPitch, rate: SoundEffects.Rate.Default, echo: SoundEffects.Echo.Default, distortion: SoundEffects.Distortion.Default)
     }
     @IBAction func playLowPitchSound(sender: UIButton) {
-        playSoundWithPitch(SoundEffects.Pitch.Low)
+        playAudio(pitch: lowPitch, rate: SoundEffects.Rate.Default, echo: SoundEffects.Echo.Default, distortion: SoundEffects.Distortion.Default)
+    }
+    @IBAction func playReverbSound(sender: UIButton) {
+        playAudio(pitch: SoundEffects.Pitch.Default, rate: SoundEffects.Rate.Default, echo: SoundEffects.Echo.Default, distortion: distort)
+    }
+    @IBAction func playEchoSound(sender: UIButton) {
+        playAudio(pitch: SoundEffects.Pitch.Default, rate: SoundEffects.Rate.Default, echo: echo, distortion: SoundEffects.Distortion.Default)
+    }
+    @IBAction func stopAudio(sender: UIButton) {
+        stopAndResetAudio()
+    }
+    @IBAction func changeSettings(sender: UIButton) {
+        performSegueWithIdentifier(SegueIdentifiers.SettingsIdentifier, sender: nil)
     }
     
-    @IBAction func stopAudio(sender: UIButton) {
-        avPlayer.stop()
+    //MARK: - Navigation
+    override func prepareForSegue(segue: UIStoryboardSegue, sender: AnyObject?) {
+        if segue.identifier == SegueIdentifiers.SettingsIdentifier {
+            if let stvc = segue.destinationViewController as? SettingsTableViewController {
+                stopAndResetAudio()
+            }
+        }
     }
     
     //MARK: - View Controller Life Cycle
     override func viewDidLoad() {
         super.viewDidLoad()
-        //The commented out code is to point to a hard coded audio file for testing
-//        if let filePath = NSBundle.mainBundle().pathForResource("movie_quote", ofType: ".mp3") {
-//            let filePathURL = NSURL.fileURLWithPath(filePath)
-//            do {
-//                avPlayer = try AVAudioPlayer(contentsOfURL: filePathURL, fileTypeHint: nil)
-//                avPlayer.enableRate = true
-//            } catch _{
-//                return print("file not found")
-//            }
-//        } else {
-//            print("The filePath is empty")
-//        }
+
         if receivedAudio != nil {
-            do {
-                avPlayer = try AVAudioPlayer(contentsOfURL: receivedAudio.filePathURL, fileTypeHint: nil)
-                avPlayer.enableRate = true
-            } catch {
-                print("The filePath is empty")
-            }
-            if avPlayer != nil {
-                audioEngine = AVAudioEngine()
-                audioFile = try! AVAudioFile(forReading: receivedAudio.filePathURL)
-            }
+            
+            //setup audio file
+            audioFile = try? AVAudioFile(forReading: receivedAudio.filePathURL)
+            audioEngine = AVAudioEngine()
+            
+            avPlayerNode = AVAudioPlayerNode()
+            echoEffect = AVAudioUnitDelay()
+            timePitchEffect = AVAudioUnitTimePitch()
+            distortionEffect = AVAudioUnitDistortion()
+            speedEffect = AVAudioUnitVarispeed()
+            
+            //attach effects
+            audioEngine.attachNode(avPlayerNode)
+            audioEngine.attachNode(echoEffect)
+            audioEngine.attachNode(timePitchEffect)
+            audioEngine.attachNode(distortionEffect)
+            audioEngine.attachNode(speedEffect)
+            
         }
     }
 

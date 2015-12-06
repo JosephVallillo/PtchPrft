@@ -28,16 +28,12 @@ class RecordSoundsViewController: UIViewController, AVAudioRecorderDelegate {
     //MARK: - Button Actions
     @IBAction func recordAudio(sender: UIButton) {
         //Display stop button and recording text
-        recordingInProgress.hidden = false
+        recordingInProgress.text = "Recording..."
         stopButton.hidden = false
         //TODO: - Record users voice
         let dirPath = NSSearchPathForDirectoriesInDomains(.DocumentDirectory,
             .UserDomainMask,
             true)[0] as String
-//        let currentDateTime = NSDate()
-//        let formatter = NSDateFormatter()
-//        formatter.dateFormat = "ddMMyyyy-HHmmss"
-//        let recordingName = formatter.stringFromDate(currentDateTime)+".wav"
         let recordingName = "my_audio.wav"
         let pathArray = [dirPath, recordingName]
         let filePath = NSURL.fileURLWithPathComponents(pathArray)
@@ -49,6 +45,7 @@ class RecordSoundsViewController: UIViewController, AVAudioRecorderDelegate {
             try session.setCategory(AVAudioSessionCategoryPlayAndRecord)
         } catch {
             print("could not get session")
+            recordingInProgress.text = "Recording was not successful"
         }
         
         
@@ -62,6 +59,7 @@ class RecordSoundsViewController: UIViewController, AVAudioRecorderDelegate {
             audioRecorder.record()
         } catch {
             print("could not create audio recorder")
+            recordingInProgress.text = "Recording was not successful"
         }
         
         //disable the record button
@@ -82,15 +80,14 @@ class RecordSoundsViewController: UIViewController, AVAudioRecorderDelegate {
     //MARK: - Audio Recorder Delegate
     func audioRecorderDidFinishRecording(recorder: AVAudioRecorder, successfully flag: Bool) {
         if  (flag) {
-            //TODO: - Step 1 - save the recording
-            recordedAudio = RecordedAudio()
-            recordedAudio.filePathURL = recorder.url
-            recordedAudio.title = recorder.url.lastPathComponent
+            //Step 1 - save the recording
+            recordedAudio = RecordedAudio(url: recorder.url, title: recorder.url.lastPathComponent!)
         
             //TODO: - Step 2 - segue
             self.performSegueWithIdentifier(SegueIdentifier.StopRecordingIdentifier, sender: recordedAudio)
         } else {
             print("Recording was not successful")
+            recordingInProgress.text = "Recording was not successful"
             stopButton.hidden = true
             recordButton.enabled = true
         }
@@ -115,6 +112,8 @@ class RecordSoundsViewController: UIViewController, AVAudioRecorderDelegate {
     
     override func viewWillAppear(animated: Bool) {
         super.viewWillAppear(animated)
+        recordingInProgress.hidden = false
+        recordingInProgress.text = "Tap to Record"
         stopButton.hidden = true
         recordButton.enabled = true
     }
